@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.pytype/
+
+# Virtual environments
+venv/
+.venv/
+backend/.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Node / JavaScript
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Next.js / frontend builds
+frontend/.next/
+frontend/.turbo/
+frontend/.cache/
+frontend/out/
+frontend/dist/
+frontend/.pnpm/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database files
+*.sqlite3
+*.db
+*.db-journal
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+
+# Build / dependency directories
+build/
+dist/
+
+# Temporary files
+tmp/
+temp/
+
+# Python package artifacts
+*.egg
+*.egg-info
+*.manifest
+*.spec
+
+# Ignore root node_modules if created accidentally
+node_modules/
+
+# Ignore any local workspace settings
+*.code-workspace
