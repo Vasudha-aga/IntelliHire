@@ -232,6 +232,15 @@ def analyze_speech(audio_bytes: bytes, file_extension: str = "wav") -> dict:
         1
     )
 
+    # Calculate Nervousness Score (0-100)
+    # High fillers, low confidence, and high hesitations = high nervousness
+    nervousness_score = round(
+        (100 - confidence["score"]) * 0.4 +
+        (100 - fillers["score"]) * 0.3 +
+        (100 - hesitations["score"]) * 0.3,
+        1
+    )
+
     return {
         "transcript": transcript,
         "duration_seconds": duration,
@@ -240,5 +249,6 @@ def analyze_speech(audio_bytes: bytes, file_extension: str = "wav") -> dict:
         "confidence": confidence,
         "hesitations": hesitations,
         "communication_score": communication_score,
+        "nervousness_score": nervousness_score,
         "audio_features": audio_features
     }

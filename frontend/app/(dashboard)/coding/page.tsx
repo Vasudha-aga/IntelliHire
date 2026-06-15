@@ -24,7 +24,9 @@ import {
   Terminal,
   CheckCircle2,
   XCircle,
+  Loader2
 } from "lucide-react"
+import { api } from "@/lib/api"
 
 type CodingState = "setup" | "coding"
 
@@ -37,50 +39,6 @@ const languages = [
   { value: "c", label: "C" },
 ]
 
-const problemStatement = `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
-
-You may assume that each input would have exactly one solution, and you may not use the same element twice.
-
-You can return the answer in any order.`
-
-const examples = [
-  {
-    input: "nums = [2,7,11,15], target = 9",
-    output: "[0,1]",
-    explanation: "Because nums[0] + nums[1] == 9, we return [0, 1].",
-  },
-  {
-    input: "nums = [3,2,4], target = 6",
-    output: "[1,2]",
-    explanation: "nums[1] + nums[2] == 6",
-  },
-]
-
-const constraints = [
-  "2 <= nums.length <= 10^4",
-  "-10^9 <= nums[i] <= 10^9",
-  "-10^9 <= target <= 10^9",
-  "Only one valid answer exists.",
-]
-
-const starterCode = `def twoSum(nums: List[int], target: int) -> List[int]:
-    # Your code here
-    hashmap = {}
-    for i, num in enumerate(nums):
-        complement = target - num
-        if complement in hashmap:
-            return [hashmap[complement], i]
-        hashmap[num] = i
-    return []`
-
-const testCases = [
-  { input: "[2,7,11,15], target=9", expected: "[0, 1]", actual: "[0, 1]", passed: true },
-  { input: "[3,2,4], target=6", expected: "[1, 2]", actual: "[1, 2]", passed: true },
-  { input: "[3,3], target=6", expected: "[0, 1]", actual: "[0, 1]", passed: true },
-  { input: "[1,5,3,7], target=8", expected: "[1, 3]", actual: "[]", passed: false },
-  { input: "[0,4,3,0], target=0", expected: "[0, 3]", actual: "[0, 3]", passed: true },
-]
-
 export default function CodingPage() {
   const [state, setState] = useState<CodingState>("setup")
   const [questionSource, setQuestionSource] = useState<"jd" | "company">("jd")
@@ -88,15 +46,88 @@ export default function CodingPage() {
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium")
   const [questionType, setQuestionType] = useState<"random" | "pyq">("random")
   const [language, setLanguage] = useState("python")
-  const [code, setCode] = useState(starterCode)
+  
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [questionData, setQuestionData] = useState<any>(null)
+  const [code, setCode] = useState("")
+  
   const [showResults, setShowResults] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  const [runResult, setRunResult] = useState<any>(null)
+  const [submitResult, setSubmitResult] = useState<any>(null)
 
-  const handleGenerate = () => {
-    setState("coding")
+  const handleGenerate = async () => {
+    setIsGenerating(true)
+    try {
+      const payload = {
+        source: questionSource,
+        jd_text: questionSource === "jd" ? "General JD" : "",
+        company: questionSource === "company" ? company : "",
+        difficulty,
+        language,
+        question_type: questionType
+      }
+      const res = await api.post('/api/coding/generate-question', payload)
+      setQuestionData(res.data)
+      setCode(res.data.starter_code?.[language] || "")
+      setState("coding")
+      setShowResults(false)
+      setRunResult(null)
+      setSubmitResult(null)
+    } catch (error) {
+      console.error("Failed to generate question", error)
+      alert("Failed to generate question. Check backend connection.")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
-  const handleRun = () => {
+  const handleRun = async () => {
+    setIsRunning(true)
     setShowResults(true)
+    setSubmitResult(null)
+    try {
+      // Just run against the first example for quick run
+      const firstExample = questionData?.examples?.[0]?.input || ""
+      const wrapper_code = questionData?.wrappers?.[language] || ""
+      const res = await api.post('/api/coding/run', {
+        language,
+        source_code: code,
+        stdin: firstExample,
+        wrapper_code
+      })
+      setRunResult(res.data)
+    } catch (error) {
+      console.error("Run failed", error)
+      setRunResult({ error: "Execution failed" })
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setShowResults(true)
+    setRunResult(null)
+    try {
+      const wrapper_code = questionData?.wrappers?.[language] || ""
+      const res = await api.post('/api/coding/submit', {
+        problem_title: questionData?.title || "Coding Problem",
+        difficulty,
+        language,
+        source_code: code,
+        test_cases: questionData?.test_cases || [],
+        wrapper_code
+      })
+      setSubmitResult(res.data)
+    } catch (error) {
+      console.error("Submit failed", error)
+      setSubmitResult({ error: "Submission failed" })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -223,9 +254,19 @@ export default function CodingPage() {
                 size="lg"
                 className="w-full gradient-btn border-0 text-white"
                 onClick={handleGenerate}
+                disabled={isGenerating || (questionSource === "company" && !company)}
               >
-                <Rocket className="mr-2 w-5 h-5" />
-                Generate Question
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 w-5 h-5 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="mr-2 w-5 h-5" />
+                    Generate Question
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -235,18 +276,25 @@ export default function CodingPage() {
             <div className="glass rounded-2xl p-4 mb-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <h2 className="font-heading font-semibold text-foreground">
-                  Two Sum
+                  {questionData?.title || "Coding Problem"}
                 </h2>
-                <span className="px-2.5 py-1 rounded-full bg-warning/20 text-warning text-xs font-medium">
-                  Medium
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                  questionData?.difficulty === 'easy' ? 'bg-success/20 text-success' :
+                  questionData?.difficulty === 'hard' ? 'bg-destructive/20 text-destructive' :
+                  'bg-warning/20 text-warning'
+                }`}>
+                  {questionData?.difficulty || difficulty}
                 </span>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="w-4 h-4" />
-                  <span className="font-mono">25:30</span>
+                  <span className="font-mono">--:--</span>
                 </div>
-                <Select value={language} onValueChange={setLanguage}>
+                <Select value={language} onValueChange={(v) => {
+                  setLanguage(v);
+                  setCode(questionData?.starter_code?.[v] || "");
+                }}>
                   <SelectTrigger className="w-32 bg-card border-border">
                     <SelectValue />
                   </SelectTrigger>
@@ -258,12 +306,12 @@ export default function CodingPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="border-border" onClick={handleRun}>
-                  <Play className="mr-2 w-4 h-4" />
+                <Button variant="outline" className="border-border" onClick={handleRun} disabled={isRunning || isSubmitting}>
+                  {isRunning ? <Loader2 className="mr-2 w-4 h-4 animate-spin" /> : <Play className="mr-2 w-4 h-4" />}
                   Run
                 </Button>
-                <Button className="gradient-btn border-0 text-white">
-                  <CheckCircle className="mr-2 w-4 h-4" />
+                <Button className="gradient-btn border-0 text-white" onClick={handleSubmit} disabled={isRunning || isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 w-4 h-4 animate-spin" /> : <CheckCircle className="mr-2 w-4 h-4" />}
                   Submit
                 </Button>
               </div>
@@ -283,21 +331,17 @@ export default function CodingPage() {
                       <Lightbulb className="w-4 h-4 mr-2" />
                       Hints
                     </TabsTrigger>
-                    <TabsTrigger value="similar" className="data-[state=active]:gradient-btn data-[state=active]:text-white">
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      Similar
-                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="description" className="space-y-6">
                     <div>
                       <p className="text-foreground leading-relaxed whitespace-pre-line">
-                        {problemStatement}
+                        {questionData?.problem_statement}
                       </p>
                     </div>
 
                     <div className="space-y-4">
-                      {examples.map((example, i) => (
+                      {questionData?.examples?.map((example: any, i: number) => (
                         <div key={i} className="bg-card rounded-xl p-4">
                           <p className="text-sm font-medium text-foreground mb-2">
                             Example {i + 1}:
@@ -324,7 +368,7 @@ export default function CodingPage() {
                         Constraints:
                       </p>
                       <ul className="space-y-1">
-                        {constraints.map((c, i) => (
+                        {questionData?.constraints?.map((c: string, i: number) => (
                           <li key={i} className="text-sm text-muted-foreground font-mono">
                             • {c}
                           </li>
@@ -334,31 +378,13 @@ export default function CodingPage() {
                   </TabsContent>
 
                   <TabsContent value="hints" className="space-y-4">
-                    <div className="bg-card rounded-xl p-4">
-                      <p className="text-sm text-muted-foreground">
-                        <span className="text-primary font-medium">Hint 1:</span> Think about using a hash map to store previously seen numbers.
-                      </p>
-                    </div>
-                    <div className="bg-card rounded-xl p-4">
-                      <p className="text-sm text-muted-foreground">
-                        <span className="text-primary font-medium">Hint 2:</span> For each number, check if target - current number exists in the hash map.
-                      </p>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="similar" className="space-y-2">
-                    <div className="bg-card rounded-xl p-4 flex items-center justify-between">
-                      <span className="text-sm text-foreground">3Sum</span>
-                      <span className="text-xs text-warning">Medium</span>
-                    </div>
-                    <div className="bg-card rounded-xl p-4 flex items-center justify-between">
-                      <span className="text-sm text-foreground">4Sum</span>
-                      <span className="text-xs text-warning">Medium</span>
-                    </div>
-                    <div className="bg-card rounded-xl p-4 flex items-center justify-between">
-                      <span className="text-sm text-foreground">Two Sum II</span>
-                      <span className="text-xs text-warning">Medium</span>
-                    </div>
+                    {questionData?.hints?.map((hint: string, i: number) => (
+                      <div key={i} className="bg-card rounded-xl p-4">
+                        <p className="text-sm text-muted-foreground">
+                          <span className="text-primary font-medium">Hint {i + 1}:</span> {hint}
+                        </p>
+                      </div>
+                    ))}
                   </TabsContent>
                 </Tabs>
               </div>
@@ -381,70 +407,47 @@ export default function CodingPage() {
                 {/* Results Panel */}
                 {showResults && (
                   <div className="glass rounded-2xl p-4 max-h-64 overflow-y-auto">
-                    <Tabs defaultValue="testcases">
+                    <Tabs defaultValue={submitResult ? "results" : "output"}>
                       <TabsList className="bg-card border border-border mb-4">
-                        <TabsTrigger value="testcases" className="data-[state=active]:gradient-btn data-[state=active]:text-white">
-                          Test Cases
-                        </TabsTrigger>
                         <TabsTrigger value="output" className="data-[state=active]:gradient-btn data-[state=active]:text-white">
-                          Output
+                          Run Output
                         </TabsTrigger>
-                        <TabsTrigger value="results" className="data-[state=active]:gradient-btn data-[state=active]:text-white">
-                          Results
-                        </TabsTrigger>
+                        {submitResult && (
+                          <TabsTrigger value="results" className="data-[state=active]:gradient-btn data-[state=active]:text-white">
+                            Submit Results
+                          </TabsTrigger>
+                        )}
                       </TabsList>
 
-                      <TabsContent value="testcases">
-                        <div className="space-y-2">
-                          {testCases.map((tc, i) => (
-                            <div
-                              key={i}
-                              className={`flex items-center justify-between p-3 rounded-lg ${
-                                tc.passed ? "bg-success/10" : "bg-destructive/10"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {tc.passed ? (
-                                  <CheckCircle2 className="w-4 h-4 text-success" />
-                                ) : (
-                                  <XCircle className="w-4 h-4 text-destructive" />
-                                )}
-                                <span className="font-mono text-xs text-muted-foreground">
-                                  {tc.input}
-                                </span>
-                              </div>
-                              <span className={`font-mono text-xs ${tc.passed ? "text-success" : "text-destructive"}`}>
-                                {tc.actual}
+                      <TabsContent value="output">
+                        {isRunning ? (
+                          <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin text-primary"/></div>
+                        ) : runResult ? (
+                          <div className="bg-card rounded-xl p-4 font-mono text-sm space-y-2">
+                            {runResult.error && <p className="text-destructive">{runResult.error}</p>}
+                            {runResult.compile_output && <p className="text-destructive whitespace-pre-wrap">{runResult.compile_output}</p>}
+                            {runResult.stderr && <p className="text-destructive whitespace-pre-wrap">{runResult.stderr}</p>}
+                            {runResult.stdout && <p className="text-foreground whitespace-pre-wrap">{runResult.stdout}</p>}
+                            {runResult.runtime_ms !== undefined && <p className="text-muted-foreground mt-4">Runtime: {runResult.runtime_ms}ms</p>}
+                          </div>
+                        ) : null}
+                      </TabsContent>
+
+                      {submitResult && (
+                        <TabsContent value="results">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-4">
+                              <span className={`${submitResult.score >= 80 ? 'text-success' : submitResult.score >= 50 ? 'text-warning' : 'text-destructive'} font-medium`}>
+                                Score: {submitResult.score}% ({submitResult.test_results?.test_cases_passed}/{submitResult.test_results?.test_cases_total} passed)
                               </span>
                             </div>
-                          ))}
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="output">
-                        <div className="bg-card rounded-xl p-4 font-mono text-sm">
-                          <p className="text-muted-foreground">Runtime: 45ms</p>
-                          <p className="text-muted-foreground">Memory: 16.2 MB</p>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="results">
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-4">
-                            <span className="text-success font-medium">4/5 Test Cases Passed</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-card rounded-xl p-4">
-                              <p className="text-xs text-muted-foreground mb-1">Runtime</p>
-                              <p className="text-foreground font-medium">45ms (beats 78%)</p>
-                            </div>
-                            <div className="bg-card rounded-xl p-4">
-                              <p className="text-xs text-muted-foreground mb-1">Complexity</p>
-                              <p className="text-foreground font-medium">O(n)</p>
+                            <div className="bg-card rounded-xl p-4 space-y-2">
+                              <p className="text-xs text-muted-foreground mb-1">Feedback</p>
+                              <p className="text-foreground text-sm">{submitResult.quality_assessment?.feedback}</p>
                             </div>
                           </div>
-                        </div>
-                      </TabsContent>
+                        </TabsContent>
+                      )}
                     </Tabs>
                   </div>
                 )}

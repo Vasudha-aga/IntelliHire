@@ -3,6 +3,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from app.services.nlp_engine import extract_skills_from_text, parse_job_description
+from app.services.llm_service import extract_missing_keywords
 
 # Load once at startup
 model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -130,6 +131,10 @@ def run_ats_analysis(parsed_resume: dict, jd_text: str) -> dict:
     skills_data = calculate_skills_match(resume_skills, jd_skills)
     skills_score = skills_data["match_percentage"]
 
+    # Deep LLM Analysis for Keywords
+    llm_gaps = extract_missing_keywords(resume_text, jd_text)
+    deep_missing_skills = list(set(skills_data["missing_skills"] + llm_gaps.get("critical_missing_keywords", [])))
+
     project_score = calculate_project_relevance(parsed_resume, jd_text)
     keyword_score = calculate_keyword_match(resume_text, jd_text)
     quality_score = assess_resume_quality(parsed_resume)
@@ -157,7 +162,8 @@ def run_ats_analysis(parsed_resume: dict, jd_text: str) -> dict:
             "technical_alignment": round(semantic_score, 1)
         },
         "matched_skills": skills_data["matched_skills"],
-        "missing_skills": skills_data["missing_skills"],
+        "missing_skills": deep_missing_skills,
+        "llm_gap_analysis": llm_gaps,
         "total_skills_required": skills_data["total_required"],
         "total_skills_matched": skills_data["total_matched"],
         "shortlisting_probability": shortlisting,

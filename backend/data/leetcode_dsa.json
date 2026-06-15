@@ -1,0 +1,132 @@
+[
+    {
+        "id": "two-sum",
+        "title": "Two Sum",
+        "difficulty": "easy",
+        "topic": "Arrays",
+        "companies": ["google", "amazon", "apple", "microsoft", "meta"],
+        "problem_statement": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\nYou can return the answer in any order.",
+        "examples": [
+            {
+                "input": "nums = [2,7,11,15], target = 9",
+                "output": "[0,1]",
+                "explanation": "Because nums[0] + nums[1] == 9, we return [0, 1]."
+            },
+            {
+                "input": "nums = [3,2,4], target = 6",
+                "output": "[1,2]",
+                "explanation": "Because nums[1] + nums[2] == 6, we return [1, 2]."
+            }
+        ],
+        "constraints": [
+            "2 <= nums.length <= 10^4",
+            "-10^9 <= nums[i] <= 10^9",
+            "-10^9 <= target <= 10^9",
+            "Only one valid answer exists."
+        ],
+        "hints": [
+            "A really brute force way would be to search for all possible pairs of numbers but that would be too slow. Again, it's best to try out brute force solutions for just for completeness. It is from these brute force solutions that you can come up with optimizations.",
+            "So, if we fix one of the numbers, say x, we have to scan the entire array to find the next number y which is value - x where value is the input parameter. Can we change our array keeping so that this search becomes faster?",
+            "The second train of thought is, without changing the array, can we use additional space somehow? Like maybe a hash map to speed up the search?"
+        ],
+        "starter_code": {
+            "python": "class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        # Write your code here\n        pass",
+            "java": "class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write your code here\n        return new int[]{};\n    }\n}",
+            "cpp": "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        // Write your code here\n        return {};\n    }\n};"
+        },
+        "test_cases": [
+            {"input": "[2,7,11,15]\n9", "expected_output": "[0, 1]"},
+            {"input": "[3,2,4]\n6", "expected_output": "[1, 2]"},
+            {"input": "[3,3]\n6", "expected_output": "[0, 1]"}
+        ],
+        "wrappers": {
+            "python": "\nimport sys\nimport json\n\nif __name__ == '__main__':\n    lines = sys.stdin.read().splitlines()\n    if len(lines) >= 2:\n        nums = json.loads(lines[0])\n        target = int(lines[1])\n        sol = Solution()\n        res = sol.twoSum(nums, target)\n        print(json.dumps(res).replace(' ', ''))\n"
+        }
+    },
+    {
+        "id": "valid-parentheses",
+        "title": "Valid Parentheses",
+        "difficulty": "easy",
+        "topic": "Stacks",
+        "companies": ["google", "amazon", "microsoft", "meta"],
+        "problem_statement": "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.\nAn input string is valid if:\n1. Open brackets must be closed by the same type of brackets.\n2. Open brackets must be closed in the correct order.\n3. Every close bracket has a corresponding open bracket of the same type.",
+        "examples": [
+            {
+                "input": "s = \"()\"",
+                "output": "true",
+                "explanation": ""
+            },
+            {
+                "input": "s = \"()[]{}\"",
+                "output": "true",
+                "explanation": ""
+            },
+            {
+                "input": "s = \"(]\"",
+                "output": "false",
+                "explanation": ""
+            }
+        ],
+        "constraints": [
+            "1 <= s.length <= 10^4",
+            "s consists of parentheses only '()[]{}'."
+        ],
+        "hints": [
+            "Use a stack of characters.",
+            "When you encounter an opening bracket, push it to the top of the stack.",
+            "When you encounter a closing bracket, check if the top of the stack was the opening for it. If yes, pop it from the stack. Otherwise, return false."
+        ],
+        "starter_code": {
+            "python": "class Solution:\n    def isValid(self, s: str) -> bool:\n        # Write your code here\n        pass"
+        },
+        "test_cases": [
+            {"input": "()", "expected_output": "true"},
+            {"input": "()[]{}", "expected_output": "true"},
+            {"input": "(]", "expected_output": "false"},
+            {"input": "([)]", "expected_output": "false"},
+            {"input": "{[]}", "expected_output": "true"}
+        ],
+        "wrappers": {
+            "python": "\nimport sys\nimport json\n\nif __name__ == '__main__':\n    s = sys.stdin.read().strip()\n    sol = Solution()\n    res = sol.isValid(s)\n    print(str(res).lower())\n"
+        }
+    },
+    {
+        "id": "merge-intervals",
+        "title": "Merge Intervals",
+        "difficulty": "medium",
+        "topic": "Arrays",
+        "companies": ["google", "amazon", "microsoft", "uber", "flipkart"],
+        "problem_statement": "Given an array of intervals where intervals[i] = [starti, endi], merge all overlapping intervals, and return an array of the non-overlapping intervals that cover all the intervals in the input.",
+        "examples": [
+            {
+                "input": "intervals = [[1,3],[2,6],[8,10],[15,18]]",
+                "output": "[[1,6],[8,10],[15,18]]",
+                "explanation": "Since intervals [1,3] and [2,6] overlap, merge them into [1,6]."
+            },
+            {
+                "input": "intervals = [[1,4],[4,5]]",
+                "output": "[[1,5]]",
+                "explanation": "Intervals [1,4] and [4,5] are considered overlapping."
+            }
+        ],
+        "constraints": [
+            "1 <= intervals.length <= 10^4",
+            "intervals[i].length == 2",
+            "0 <= starti <= endi <= 10^4"
+        ],
+        "hints": [
+            "Sort the intervals by their start value.",
+            "If the current interval begins after the previous interval ends, then they do not overlap. Otherwise, they do overlap."
+        ],
+        "starter_code": {
+            "python": "class Solution:\n    def merge(self, intervals: list[list[int]]) -> list[list[int]]:\n        # Write your code here\n        pass"
+        },
+        "test_cases": [
+            {"input": "[[1,3],[2,6],[8,10],[15,18]]", "expected_output": "[[1, 6], [8, 10], [15, 18]]"},
+            {"input": "[[1,4],[4,5]]", "expected_output": "[[1, 5]]"}
+        ],
+        "wrappers": {
+            "python": "\nimport sys\nimport json\n\nif __name__ == '__main__':\n    lines = sys.stdin.read().strip()\n    intervals = json.loads(lines)\n    sol = Solution()\n    res = sol.merge(intervals)\n    print(json.dumps(res).replace(' ', ''))\n"
+        }
+    }
+]

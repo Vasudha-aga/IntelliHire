@@ -96,6 +96,31 @@ Make suggestions specific to THIS resume and THIS job description. Max 5 items p
 
 
 # ─────────────────────────────────────────────────
+# DEEP ATS KEYWORD GAP ANALYSIS
+# ─────────────────────────────────────────────────
+def extract_missing_keywords(resume_text: str, jd_text: str) -> dict:
+    prompt = f"""
+You are an expert Applicant Tracking System (ATS) algorithm. Compare the candidate's resume with the job description and perform a deep keyword gap analysis.
+
+RESUME TEXT:
+{resume_text[:3000]}
+
+JOB DESCRIPTION:
+{jd_text[:2000]}
+
+Extract EXACT missing keywords (hard skills, soft skills, tools, methodologies) that are present in the JD but missing from the resume. Return ONLY valid JSON:
+{{
+    "missing_hard_skills": ["skill1", "skill2"],
+    "missing_soft_skills": ["skill1", "skill2"],
+    "missing_tools": ["tool1", "tool2"],
+    "critical_missing_keywords": ["keyword1", "keyword2"]
+}}
+"""
+    response = call_claude(prompt, max_tokens=1000)
+    return parse_json_response(response)
+
+
+# ─────────────────────────────────────────────────
 # INTERVIEW QUESTION GENERATION
 # ─────────────────────────────────────────────────
 def generate_interview_question(
@@ -193,6 +218,9 @@ Be honest - if the answer is poor, give low scores. If excellent, give high scor
 # ─────────────────────────────────────────────────
 # CODING QUESTION GENERATION
 # ─────────────────────────────────────────────────
+import os
+import random
+
 def generate_coding_question(
     jd_text: str = "",
     company: str = "",
@@ -200,6 +228,33 @@ def generate_coding_question(
     language: str = "python",
     question_type: str = "random"
 ) -> dict:
+    # Attempt to load from real LeetCode database
+    try:
+        db_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "leetcode_dsa.json")
+        if os.path.exists(db_path):
+            with open(db_path, "r", encoding="utf-8") as f:
+                questions = json.load(f)
+            
+            # Filter by difficulty
+            filtered = [q for q in questions if q.get("difficulty", "").lower() == difficulty.lower()]
+            if not filtered:
+                filtered = questions
+            
+            # If company specific, try to find a company match
+            if company:
+                company_match = [q for q in filtered if company.lower() in [c.lower() for c in q.get("companies", [])]]
+                if company_match:
+                    filtered = company_match
+            
+            # Pick a random question from the filtered list
+            if filtered:
+                q = random.choice(filtered)
+                # Keep the wrapper code in the result so the engine can use it later
+                return q
+    except Exception as e:
+        print(f"Error loading leetcode db: {e}")
+
+    # Fallback to LLM if no DB or no questions match at all
     context = f"Job Description: {jd_text[:500]}" if jd_text else f"Company: {company}"
 
     prompt = f"""
@@ -237,10 +292,7 @@ Return ONLY valid JSON:
         "hint 2 (more specific)"
     ],
     "starter_code": {{
-        "python": "def solution(...):\\n    # Write your solution here\\n    pass",
-        "java": "class Solution {{\\n    public ... solution(...) {{\\n        // Write here\\n    }}\\n}}",
-        "cpp": "class Solution {{\\npublic:\\n    ... solution(...) {{\\n        // Write here\\n    }}\\n}};",
-        "c": "// Write your solution here"
+        "python": "class Solution:\\n    def solution(self, ...):\\n        # Write your solution here\\n        pass"
     }},
     "test_cases": [
         {{"input": "test input 1", "expected_output": "output 1"}},
@@ -255,6 +307,7 @@ Return ONLY valid JSON:
 """
     response = call_claude(prompt, max_tokens=2000)
     return parse_json_response(response)
+
 
 
 # ─────────────────────────────────────────────────
@@ -305,7 +358,8 @@ Generate a comprehensive report. Return ONLY valid JSON:
         "resume_score": <0-100>,
         "interview_score": <0-100>,
         "communication_score": <0-100>,
-        "coding_score": <0-100>
+        "coding_score": <0-100>,
+        "nervousness_score": <0-100, extracted from speech_metrics or estimated based on text if not present>
     }},
     "strengths": [
         "strength 1 with specific detail",

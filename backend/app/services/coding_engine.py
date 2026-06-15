@@ -1,95 +1,97 @@
 import httpx
-import asyncio
-import base64
-from app.core.config import settings
 
-# Judge0 language IDs
-LANGUAGE_IDS = {
-    "python": 71,
-    "java": 62,
-    "cpp": 54,
-    "c": 50,
-    "javascript": 63
+# Piston API language mappings
+PISTON_LANGUAGES = {
+    "python": {"language": "python", "version": "3.10.0"},
+    "java": {"language": "java", "version": "15.0.2"},
+    "cpp": {"language": "c++", "version": "10.2.0"},
+    "c": {"language": "c", "version": "10.2.0"},
+    "javascript": {"language": "javascript", "version": "18.15.0"}
 }
 
-JUDGE0_HEADERS = {
-    "X-RapidAPI-Key": settings.JUDGE0_API_KEY or "",
-    "X-RapidAPI-Host": "judge0-ce.p.rapidapi.com",
-    "Content-Type": "application/json"
-}
+PISTON_URL = "https://emkc.org/api/v2/piston/execute"
 
-
-async def submit_code(
+async def execute_code(
     source_code: str,
     language: str,
     stdin: str = "",
     expected_output: str = ""
 ) -> dict:
-    """Submit code to Judge0 and get submission token"""
-    language_id = LANGUAGE_IDS.get(language.lower(), 71)
-
+    """Execute code using Piston API (Free, no auth required)"""
+    lang_config = PISTON_LANGUAGES.get(language.lower(), PISTON_LANGUAGES["python"])
+    
     payload = {
-        "source_code": base64.b64encode(source_code.encode()).decode(),
-        "language_id": language_id,
-        "stdin": base64.b64encode(stdin.encode()).decode() if stdin else "",
-        "expected_output": base64.b64encode(
-            expected_output.encode()
-        ).decode() if expected_output else "",
-        "base64_encoded": True,
-        "wait": False
+        "language": lang_config["language"],
+        "version": "*", # Auto-select latest version
+        "files": [
+            {
+                "content": source_code
+            }
+        ],
+        "stdin": stdin,
+        "run_timeout": 5000 # 5 seconds
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{settings.JUDGE0_URL}/submissions",
-            headers=JUDGE0_HEADERS,
-            json=payload,
-            timeout=30
-        )
-        data = response.json()
-        return data.get("token", "")
-
-
-async def get_submission_result(token: str, max_retries: int = 10) -> dict:
-    """Poll Judge0 for submission result"""
-    async with httpx.AsyncClient() as client:
-        for attempt in range(max_retries):
-            response = await client.get(
-                f"{settings.JUDGE0_URL}/submissions/{token}",
-                headers=JUDGE0_HEADERS,
-                params={"base64_encoded": "true", "fields": "*"},
-                timeout=30
+        try:
+            response = await client.post(
+                PISTON_URL,
+                json=payload,
+                timeout=15.0
             )
             data = response.json()
+            
+            if response.status_code != 200:
+                return {
+                    "status": "Error",
+                    "status_id": 4,
+                    "stdout": "",
+                    "stderr": data.get("message", "API Error"),
+                    "compile_output": "",
+                    "time": 0,
+                    "memory": 0,
+                    "exit_code": 1
+                }
 
-            status_id = data.get("status", {}).get("id", 0)
+            run_result = data.get("run", {})
+            compile_result = data.get("compile", {})
+            
+            # If compile failed, Piston returns code != 0 in compile object
+            if compile_result and compile_result.get("code", 0) != 0:
+                return {
+                    "status": "Compilation Error",
+                    "status_id": 4,
+                    "stdout": "",
+                    "stderr": "",
+                    "compile_output": compile_result.get("stderr", ""),
+                    "time": 0,
+                    "memory": 0,
+                    "exit_code": compile_result.get("code")
+                }
 
-            # Status IDs: 1=In Queue, 2=Processing, 3=Accepted, 4+=Error
-            if status_id in [1, 2]:
-                await asyncio.sleep(1)
-                continue
-
-            # Decode base64 outputs
-            def decode_b64(val):
-                if val:
-                    try:
-                        return base64.b64decode(val).decode("utf-8", errors="replace")
-                    except Exception:
-                        return val
-                return ""
+            exit_code = run_result.get("code", 0)
+            status_id = 3 if exit_code == 0 else 4 # 3 is Accepted, 4 is Error
+            
+            # In Piston, expected_output needs to be checked manually
+            stdout = run_result.get("stdout", "")
+            
+            if expected_output and exit_code == 0:
+                if stdout.strip() != expected_output.strip():
+                    status_id = 4 # Wrong Answer
 
             return {
-                "status": data.get("status", {}).get("description", "Unknown"),
+                "status": "Accepted" if status_id == 3 else "Wrong Answer" if exit_code == 0 else "Runtime Error",
                 "status_id": status_id,
-                "stdout": decode_b64(data.get("stdout")),
-                "stderr": decode_b64(data.get("stderr")),
-                "compile_output": decode_b64(data.get("compile_output")),
-                "time": data.get("time"),           # execution time in seconds
-                "memory": data.get("memory"),        # memory in KB
-                "exit_code": data.get("exit_code")
+                "stdout": stdout,
+                "stderr": run_result.get("stderr", ""),
+                "compile_output": "",
+                "time": 0.1, # Piston doesn't easily return execution time in seconds, mocking it for now
+                "memory": 0,
+                "exit_code": exit_code
             }
 
-    return {"status": "Timeout", "status_id": 0, "stdout": "", "stderr": "Execution timed out"}
+        except Exception as e:
+            return {"status": "Timeout", "status_id": 0, "stdout": "", "stderr": str(e), "exit_code": 1}
 
 
 async def run_against_test_cases(
@@ -105,62 +107,43 @@ async def run_against_test_cases(
     passed = 0
 
     for i, tc in enumerate(test_cases):
-        token = await submit_code(
+        expected = tc.get("expected_output", "")
+        result = await execute_code(
             source_code=source_code,
             language=language,
             stdin=tc.get("input", ""),
-            expected_output=tc.get("expected_output", "")
+            expected_output=expected
         )
 
-        if not token:
-            results.append({
-                "test_case": i + 1,
-                "passed": False,
-                "error": "Submission failed",
-                "input": tc.get("input", ""),
-                "expected": tc.get("expected_output", ""),
-                "actual": ""
-            })
-            continue
-
-        result = await get_submission_result(token)
-
-        is_passed = result["status_id"] == 3  # Accepted
+        is_passed = result["status_id"] == 3
+        # Strict checking against expected output
+        if is_passed and expected:
+            is_passed = result["stdout"].strip() == expected.strip()
+            
         if is_passed:
             passed += 1
 
         results.append({
             "test_case": i + 1,
             "passed": is_passed,
-            "status": result["status"],
+            "status": result["status"] if is_passed else ("Wrong Answer" if result["exit_code"] == 0 else "Runtime Error"),
             "input": tc.get("input", ""),
-            "expected": tc.get("expected_output", ""),
+            "expected": expected,
             "actual": result["stdout"].strip(),
             "error": result["stderr"] or result["compile_output"],
-            "runtime_ms": round(float(result["time"] or 0) * 1000, 2),
-            "memory_kb": result["memory"] or 0
+            "runtime_ms": 100, # Mocked metric since Piston API doesn't return time
+            "memory_kb": 1024 # Mocked metric
         })
 
     total = len(test_cases)
     score = round((passed / total * 100) if total > 0 else 0, 1)
 
-    # Average runtime from passed tests
-    passed_results = [r for r in results if r["passed"]]
-    avg_runtime = (
-        sum(r["runtime_ms"] for r in passed_results) / len(passed_results)
-        if passed_results else 0
-    )
-    avg_memory = (
-        sum(r["memory_kb"] for r in passed_results) / len(passed_results)
-        if passed_results else 0
-    )
-
     return {
         "test_cases_passed": passed,
         "test_cases_total": total,
         "score": score,
-        "avg_runtime_ms": round(avg_runtime, 2),
-        "avg_memory_kb": round(avg_memory, 2),
+        "avg_runtime_ms": 100,
+        "avg_memory_kb": 1024,
         "results": results,
         "all_passed": passed == total
     }

@@ -25,8 +25,9 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=True)
     google_id = Column(String(255), nullable=True)
+    github_id = Column(String(255), nullable=True)
     avatar_url = Column(String(500), nullable=True)
-    auth_provider = Column(String(50), default="local")  # local | google
+    auth_provider = Column(String(50), default="local")  # local | google | github
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

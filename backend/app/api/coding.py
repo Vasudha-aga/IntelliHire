@@ -29,12 +29,13 @@ class SubmitCodeRequest(BaseModel):
     language: str
     source_code: str
     test_cases: List[dict]           # [{"input": "...", "expected_output": "..."}]
-
+    wrapper_code: Optional[str] = ""
 
 class RunCodeRequest(BaseModel):
     language: str
     source_code: str
     stdin: str = ""
+    wrapper_code: Optional[str] = ""
 
 
 @router.post("/generate-question")
@@ -60,8 +61,14 @@ async def run_code(
 ):
     """Quick run — execute code against a single stdin input"""
     from app.services.coding_engine import submit_code, get_submission_result
+    
+    # Append wrapper if provided for LeetCode style execution
+    final_code = data.source_code
+    if data.wrapper_code:
+        final_code += "\n" + data.wrapper_code
+
     token = await submit_code(
-        source_code=data.source_code,
+        source_code=final_code,
         language=data.language,
         stdin=data.stdin
     )
@@ -88,8 +95,13 @@ async def submit_code_endpoint(
     if not data.test_cases:
         raise HTTPException(status_code=400, detail="No test cases provided")
 
+    # Append wrapper if provided for LeetCode style execution
+    final_code = data.source_code
+    if data.wrapper_code:
+        final_code += "\n" + data.wrapper_code
+
     results = await run_against_test_cases(
-        source_code=data.source_code,
+        source_code=final_code,
         language=data.language,
         test_cases=data.test_cases
     )
